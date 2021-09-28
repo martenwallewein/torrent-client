@@ -11,12 +11,12 @@ import (
 	"github.com/scionproto/scion/go/lib/snet"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/veggiedefender/torrent-client/bitfield"
-	"github.com/veggiedefender/torrent-client/peers"
+	"github.com/martenwallewein/torrent-client/bitfield"
+	"github.com/martenwallewein/torrent-client/peers"
 
-	"github.com/veggiedefender/torrent-client/message"
+	"github.com/martenwallewein/torrent-client/message"
 
-	"github.com/veggiedefender/torrent-client/handshake"
+	"github.com/martenwallewein/torrent-client/handshake"
 )
 
 // A Client is a TCP connection with a peer

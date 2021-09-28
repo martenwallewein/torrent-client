@@ -94,7 +94,7 @@ func (s *SCIONSocket) Dial(addr string, index int) (net.Conn, error) {
 	// lUDPAddr := fmt.Sprintf("141.44.25.151:%d", (42423 + index))
 	// lUDP, _ := net.ResolveUDPAddr("udp", lUDPAddr)
 
-	sess, err := appquic.DialAddr(address, "10.0.0.1:42423", TLSCfg, &quic.Config{
+	sess, err := appquic.DialAddr(address, appnet.MangleSCIONAddr(addr), TLSCfg, &quic.Config{
 		KeepAlive: true,
 	})
 	if err != nil {
