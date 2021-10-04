@@ -1,6 +1,6 @@
-module github.com/veggiedefender/torrent-client
+module github.com/martenwallewein/torrent-client
 
-go 1.13
+go 1.16
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0 // indirect
@@ -31,5 +31,3 @@ require (
 	google.golang.org/grpc/examples v0.0.0-20210615210310-549c53a90c2a // indirect
 	zombiezen.com/go/capnproto2 v2.18.2+incompatible // indirect
 )
-
-replace github.com/netsec-ethz/scion-apps => /home/marten/go/src/github.com/git.deinstapel.de/scion-apps

@@ -7,8 +7,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/veggiedefender/torrent-client/server"
-	"github.com/veggiedefender/torrent-client/torrentfile"
+	"github.com/martenwallewein/torrent-client/server"
+	"github.com/martenwallewein/torrent-client/torrentfile"
 )
 
 func main() {
