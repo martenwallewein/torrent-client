@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"fmt"
-	"os"
-
 	"github.com/jackpal/bencode-go"
 	"github.com/martenwallewein/torrent-client/p2p"
 	"github.com/martenwallewein/torrent-client/peers"
+	"github.com/netsys-lab/dht"
 	"github.com/scionproto/scion/go/lib/snet"
+	"os"
 )
 
 // Port to listen on
@@ -19,6 +19,7 @@ const Port uint16 = 6881
 // TorrentFile encodes the metadata from a .torrent file
 type TorrentFile struct {
 	Announce    string
+	Nodes       []dht.Addr
 	InfoHash    [20]byte
 	PieceHashes [][20]byte
 	PieceLength int
@@ -36,6 +37,7 @@ type bencodeInfo struct {
 
 type bencodeTorrent struct {
 	Announce string      `bencode:"announce"`
+	Nodes    []string    `bencode:"nodes"`
 	Info     bencodeInfo `bencode:"info"`
 }
 
@@ -150,6 +152,16 @@ func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
 	if err != nil {
 		return TorrentFile{}, err
 	}
+
+	var nodes []dht.Addr
+	for _, n := range bto.Nodes{
+		addr, err := snet.ParseUDPAddr(n)
+		if err != nil {
+			return TorrentFile{}, err
+		}
+		nodes = append(nodes, dht.NewAddr(*addr))
+	}
+
 	t := TorrentFile{
 		Announce:    bto.Announce,
 		InfoHash:    infoHash,
