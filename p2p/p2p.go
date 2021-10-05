@@ -2,6 +2,8 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/martenwallewein/torrent-client/dht_node"
+	"github.com/netsys-lab/dht"
 	"log"
 	"time"
 
@@ -25,6 +27,8 @@ type Torrent struct {
 	PieceLength int
 	Length      int
 	Name        string
+	workQueue   chan *pieceWork
+	results     chan *pieceResult
 }
 
 type pieceWork struct {
@@ -129,7 +133,7 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 	return nil
 }
 
-func (t *Torrent) startDownloadWorker(peer peers.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
+func (t *Torrent) startDownloadWorker(peer peers.Peer) {
 	c, err := client.New(peer, t.PeerID, t.InfoHash)
 	if err != nil {
 		fmt.Println(err)
@@ -142,9 +146,9 @@ func (t *Torrent) startDownloadWorker(peer peers.Peer, workQueue chan *pieceWork
 	c.SendUnchoke()
 	c.SendInterested()
 	fmt.Println("Starting Download")
-	for pw := range workQueue {
+	for pw := range t.workQueue {
 		if !c.Bitfield.HasPiece(pw.index) {
-			workQueue <- pw // Put piece back on the queue
+			t.workQueue <- pw // Put piece back on the queue
 			continue
 		}
 
@@ -153,7 +157,7 @@ func (t *Torrent) startDownloadWorker(peer peers.Peer, workQueue chan *pieceWork
 		buf, err := attemptDownloadPiece(c, pw)
 		if err != nil {
 			log.Println("Exiting", err)
-			workQueue <- pw // Put piece back on the queue
+			t.workQueue <- pw // Put piece back on the queue
 			return
 		}
 
@@ -166,7 +170,7 @@ func (t *Torrent) startDownloadWorker(peer peers.Peer, workQueue chan *pieceWork
 		}*/
 
 		c.SendHave(pw.index)
-		results <- &pieceResult{pw.index, buf}
+		t.results <- &pieceResult{pw.index, buf}
 	}
 }
 
@@ -188,24 +192,24 @@ func (t *Torrent) calculatePieceSize(index int) int {
 func (t *Torrent) Download() ([]byte, error) {
 	log.Println("Starting download for", t.Name)
 	// Init queues for workers to retrieve work and send results
-	workQueue := make(chan *pieceWork, len(t.PieceHashes))
-	results := make(chan *pieceResult)
+	t.workQueue = make(chan *pieceWork, len(t.PieceHashes))
+	t.results = make(chan *pieceResult)
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
-		workQueue <- &pieceWork{index, hash, length}
+		t.workQueue <- &pieceWork{index, hash, length}
 	}
 
 	// Start workers
 	for _, peer := range t.Peers {
 		time.Sleep(100 * time.Millisecond)
-		go t.startDownloadWorker(peer, workQueue, results)
+		go t.startDownloadWorker(peer)
 	}
 
 	// Collect results into a buffer until full
 	buf := make([]byte, t.Length)
 	donePieces := 0
 	for donePieces < len(t.PieceHashes) {
-		res := <-results
+		res := <-t.results
 		begin, end := t.calculateBoundsForPiece(res.index)
 		copy(buf[begin:end], res.buf)
 		donePieces++
@@ -214,7 +218,15 @@ func (t *Torrent) Download() ([]byte, error) {
 		// numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
 		// log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, numWorkers)
 	}
-	close(workQueue)
+	close(t.workQueue)
 
 	return buf, nil
+}
+
+func (t *Torrent) EnableDht(port int, infoHash [20]byte, startingNodes []dht.Addr) (*dht_node.DhtNode, error) {
+	node, err := dht_node.New(infoHash, startingNodes, port, func(peer peers.Peer) {
+		t.Peers = append(t.Peers, peer)
+		go t.startDownloadWorker(peer)
+	})
+	return node, err
 }

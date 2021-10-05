@@ -6,10 +6,12 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"github.com/jackpal/bencode-go"
+	"github.com/martenwallewein/torrent-client/config"
 	"github.com/martenwallewein/torrent-client/p2p"
 	"github.com/martenwallewein/torrent-client/peers"
 	"github.com/netsys-lab/dht"
 	"github.com/scionproto/scion/go/lib/snet"
+	"log"
 	"os"
 )
 
@@ -42,35 +44,19 @@ type bencodeTorrent struct {
 }
 
 // DownloadToFile downloads a torrent and writes it to a file
-func (t *TorrentFile) DownloadToFile(path string, peer string, numCons int) error {
+// This function leeches all pieces of a torrent but never starts seeding. When DHT is enabled in the
+// PeerDiscoveryConfig, the peer will still announce its presence to receive other peers. We therefore announces our
+// presence on a port we are not listening to.
+func (t *TorrentFile) DownloadToFile(path string, peer string, numCons int, pc *config.PeerDiscoveryConfig) error {
 	var peerID [20]byte
 	_, err := rand.Read(peerID[:])
 	if err != nil {
 		return err
 	}
+
 	var targetPeers []peers.Peer
-
 	if peer != "" {
-		i := 0
-		pAddr, _ := snet.ParseUDPAddr(peer)
-		targetPeers = make([]peers.Peer, numCons)
-		for i < numCons {
-			// pAddr, _ := net.ResolveTCPAddr("tcp", peer)
-
-			targetPeers[i] = peers.Peer{
-				IP:    pAddr.Host.IP,
-				Port:  uint16(pAddr.Host.Port),
-				Addr:  fmt.Sprintf("%s:%d", peer, 42423+i),
-				Index: i,
-			}
-			i++
-		}
-
-	} else {
-		targetPeers, err = t.requestPeers(peerID, Port)
-		if err != nil {
-			return err
-		}
+		targetPeers = getTargetPeer(peer, numCons)
 	}
 
 	torrent := p2p.Torrent{
@@ -82,6 +68,16 @@ func (t *TorrentFile) DownloadToFile(path string, peer string, numCons int) erro
 		Length:      t.Length,
 		Name:        t.Name,
 	}
+
+	if pc.EnableDht {
+		node, err := torrent.EnableDht(0, t.InfoHash, t.Nodes)
+		if err != nil {
+			fmt.Println("could not enable dht")
+		}
+		defer node.Close()
+		fmt.Println("enabled dht")
+	}
+
 	buf, err := torrent.Download()
 	if err != nil {
 		return err
@@ -154,7 +150,7 @@ func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
 	}
 
 	var nodes []dht.Addr
-	for _, n := range bto.Nodes{
+	for _, n := range bto.Nodes {
 		addr, err := snet.ParseUDPAddr(n)
 		if err != nil {
 			return TorrentFile{}, err
@@ -169,6 +165,25 @@ func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
 		PieceLength: bto.Info.PieceLength,
 		Length:      bto.Info.Length,
 		Name:        bto.Info.Name,
+		Nodes:       nodes,
 	}
 	return t, nil
+}
+
+func getTargetPeer(peerAddr string, nCons int) []peers.Peer {
+	targets := make([]peers.Peer, nCons)
+	addr, err := snet.ParseUDPAddr(peerAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for i := 0; i < nCons; i++ {
+		targets[i] = peers.Peer{
+			IP:    addr.Host.IP,
+			Port:  uint16(addr.Host.Port),
+			Addr:  fmt.Sprintf("%s:%d", peerAddr, 42423+i),
+			Index: i,
+		}
+	}
+	return targets
 }

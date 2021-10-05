@@ -3,6 +3,8 @@ package server
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/martenwallewein/torrent-client/config"
+	"github.com/martenwallewein/torrent-client/dht_node"
 	"net"
 
 	"github.com/martenwallewein/torrent-client/bitfield"
@@ -25,9 +27,10 @@ type Server struct {
 	listener    *net.Listener
 	Bitfield    bitfield.Bitfield
 	torrentFile *torrentfile.TorrentFile
+	dhtNode     *dht_node.DhtNode // dht note controlled by this server
 }
 
-func NewServer(lAddr string, torrentFile *torrentfile.TorrentFile) (*Server, error) {
+func NewServer(lAddr string, torrentFile *torrentfile.TorrentFile, pc *config.PeerDiscoveryConfig) (*Server, error) {
 	// localAddr, err := net.ResolveTCPAddr("tcp", lAddr)
 	//if err != nil {
 	//	return nil, err
@@ -40,11 +43,20 @@ func NewServer(lAddr string, torrentFile *torrentfile.TorrentFile) (*Server, err
 		localAddr:   localAddr,
 		torrentFile: torrentFile,
 	}
-
 	// TODO: Correct length!
 	s.Bitfield = make([]byte, len(torrentFile.PieceHashes))
 	for i := range torrentFile.PieceHashes {
 		s.Bitfield.SetPiece(i)
+	}
+
+	if pc.EnableDht {
+		node, err := dht_node.New(torrentFile.InfoHash, torrentFile.Nodes, localAddr.Host.Port, func(peer peers.Peer) {
+			s.peers = append(s.peers, peer)
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.dhtNode = node
 	}
 
 	return s, nil
@@ -134,4 +146,10 @@ func (s *Server) handleIncomingHandshake(conn *net.Conn) error {
 	fmt.Println("Sent back bitfield")
 
 	return nil
+}
+
+func (s Server) Close() {
+	if s.dhtNode != nil {
+		s.dhtNode.Close()
+	}
 }
