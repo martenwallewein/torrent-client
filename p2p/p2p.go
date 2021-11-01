@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/netsys-lab/dht"
-	"github.com/scionproto/scion/go/lib/snet"
-	log "github.com/sirupsen/logrus"
-	"net"
-
 	"github.com/martenwallewein/torrent-client/client"
 	"github.com/martenwallewein/torrent-client/config"
 	"github.com/martenwallewein/torrent-client/dht_node"
 	"github.com/martenwallewein/torrent-client/message"
 	"github.com/martenwallewein/torrent-client/peers"
+	"github.com/netsys-lab/dht"
+	"github.com/scionproto/scion/go/lib/snet"
+	log "github.com/sirupsen/logrus"
 )
 
 // MaxBlockSize is the largest number of bytes a request can ask for
@@ -347,10 +345,10 @@ func (t *Torrent) Download() ([]byte, error) {
 	return buf, nil
 }
 
-func (t *Torrent) EnableDht(addr *net.UDPAddr, peerPort uint16, infoHash [20]byte, startingNodes []dht.Addr) (*dht_node.DhtNode, error) {
+func (t *Torrent) EnableDht(addr *snet.UDPAddr, peerPort uint16, infoHash [20]byte, startingNodes []dht.Addr) (*dht_node.DhtNode, error) {
 	node, err := dht_node.New(addr, infoHash, startingNodes, peerPort, func(peer peers.Peer) {
 		peerKnown := t.hasPeer(peer)
-		log.Printf("received peer via dht: %s, peer already known: %t \n", peer, peerKnown)
+		log.Infof("received peer via dht: %s, peer already known: %t", peer, peerKnown)
 		t.PeerSet.Add(peer)
 		if !peerKnown { // dont start two worker for same peer
 			go t.startDownloadWorker(peer)
