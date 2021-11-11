@@ -141,6 +141,9 @@ func (mp *MPClient) DialAndWaitForConnectBack(
 	}
 
 	localSocketAddr, err := snet.ParseUDPAddr(local)
+	if err != nil {
+		return nil, err
+	}
 	localSocketAddr.Host.Port, _ = freeport.GetFreePort()
 	localSocketAddrStr := localSocketAddr.String()
 
