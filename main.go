@@ -6,6 +6,7 @@ import (
 	"github.com/scionproto/scion/go/lib/snet"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"time"
 
 	"github.com/martenwallewein/torrent-client/config"
 	"github.com/martenwallewein/torrent-client/server"
@@ -26,12 +27,14 @@ var flags = struct {
 	EnableDht                   bool
 	DhtPort                     int
 	DhtBootstrapAddr            string
+	KeepAlive                   bool // only effects leecher, testing purpose only TODO: remove
 }{
 	Seed:                        false,
 	PathSelectionResponsibility: "server",
 	NumPaths:                    1,
 	DialBackStartPort:           45000,
 	LogLevel:                    "INFO",
+	KeepAlive:                   false,
 }
 
 func setLogging(loglevel string) {
@@ -104,9 +107,15 @@ func main() {
 			log.Fatal(err)
 		}
 	} else {
-		err = tf.DownloadToFile(flags.OutPath, flags.Peer, flags.Local, flags.PathSelectionResponsibility, &peerDiscoveryConfig)
+		t, err := tf.DownloadToFile(flags.OutPath, flags.Peer, flags.Local, flags.PathSelectionResponsibility, &peerDiscoveryConfig)
 		if err != nil {
 			log.Fatal(err)
+		}
+		if flags.KeepAlive {
+			time.Sleep(1 * time.Hour)
+		}
+		if t.DhtNode != nil {
+			t.DhtNode.Close()
 		}
 	}
 
