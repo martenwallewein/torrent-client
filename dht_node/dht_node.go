@@ -97,7 +97,12 @@ func New(
 		peerPort:          peerPort,
 		nodeAddr:          localNodeAddr,
 	}
-	go dhtNode.announceLoop()
+
+	go func() {
+		dhtNode.Node.Bootstrap()
+		go dhtNode.announceLoop()
+	}()
+
 	return &dhtNode, nil
 }
 
