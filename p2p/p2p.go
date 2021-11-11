@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/martenwallewein/torrent-client/client"
@@ -87,6 +88,7 @@ func (state *pieceProgress) readMessage() error {
 		}
 		state.client.Bitfield.SetPiece(index)
 	case message.MsgPiece:
+		log.Infof("received piece index %d", state.index)
 		n, err := message.ParsePiece(state.index, state.buf, msg)
 		if err != nil {
 			return err
@@ -134,6 +136,7 @@ func attemptDownloadPiece(c *client.Client, pw *pieceWork) ([]byte, error) {
 				if bytesDue < blockSize {
 					blockSize = bytesDue
 				}
+				log.Debugf("requesting piece %d, start %d, size %d", pw.index, state.requested, blockSize)
 				err := c.SendRequest(pw.index, state.requested, blockSize)
 				if err != nil {
 					return nil, err
@@ -244,7 +247,7 @@ func (t *Torrent) startDownloadWorker(peer peers.Peer) {
 		return
 	}
 
-	log.Infof("Completed handshake with %s, got %d clients\n", peer, len(clients))
+	log.Infof("Completed handshake with %s, got %d clients", peer, len(clients))
 	log.Infof("Starting download...")
 	for i, c := range clients {
 		if i == len(clients)-1 {
@@ -357,12 +360,16 @@ func (t *Torrent) Download() ([]byte, error) {
 }
 
 func (t *Torrent) EnableDht(addr *snet.UDPAddr, peerPort uint16, infoHash [20]byte, startingNodes []dht.Addr) (*dht_node.DhtNode, error) {
+	startingPeerLock := sync.Mutex{}
 	node, err := dht_node.New(addr, infoHash, startingNodes, peerPort, func(peer peers.Peer) {
 		peerKnown := t.hasPeer(peer)
 		log.Infof("received peer via dht: %s, peer already known: %t", peer, peerKnown)
 		t.PeerSet.Add(peer)
 		if !peerKnown { // dont start two worker for same peer
+			startingPeerLock.Lock()
 			go t.startDownloadWorker(peer)
+			time.Sleep(100 * time.Millisecond)
+			startingPeerLock.Unlock()
 		}
 	})
 	return node, err

@@ -134,6 +134,7 @@ func (d *DhtNode) announceLoop() {
 	ticker := time.NewTicker(15 * time.Minute)
 	for range ticker.C {
 		if ps != nil {
+			log.Info("closing traversal")
 			ps.Close()
 		}
 		ps, err = d.announceAndGetPeers()
@@ -164,8 +165,11 @@ func convertPeer(peer dht.Peer) peers.Peer {
 }
 
 func (d *DhtNode) consumePeers(peerStream *dht.Announce) {
+	log.Info("consuming peers")
 	for v := range peerStream.Peers {
+		log.Infof("handling %+v", v)
 		for _, cp := range v.Peers {
+			log.Infof("handling cp %+v", cp)
 			atomic.AddUint32(&d.stats.receivedPeers, 1)
 			if cp.Port == 0 {
 				atomic.AddUint32(&d.stats.blockedPeers, 1)
@@ -180,6 +184,7 @@ func (d *DhtNode) consumePeers(peerStream *dht.Announce) {
 			d.onNewPeerReceived(convertPeer(cp))
 		}
 	}
+	log.Info("done consuming peers")
 }
 
 func (d *DhtNode) Close() {
